@@ -1,8 +1,9 @@
 package com.github.ocnuhl.vmove
 
 import android.app.Activity
-import android.content.SharedPreferences
+import android.content.*
 import android.os.Bundle
+import android.os.IBinder
 import android.util.Log
 import android.view.ViewGroup
 import com.amap.api.maps.AMapOptions
@@ -15,6 +16,20 @@ class MainActivity : Activity() {
     private val KEY_LAST_LAT = "KEY_LAST_LAT"
     private val KEY_LAST_LNG = "KEY_LAST_LNG"
     private lateinit var mMapView: MapView
+    private lateinit var mService: LocalService
+    private var mBound = false
+
+    private val connection = object: ServiceConnection {
+        override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
+            val binder = service as LocalService.LocalBinder
+            mService = binder.getService()
+            mBound = true
+        }
+
+        override fun onServiceDisconnected(className: ComponentName?) {
+            mBound = false
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +42,19 @@ class MainActivity : Activity() {
 
         findViewById<ViewGroup>(R.id.container).addView(mMapView)
         initMap()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Intent(this, LocalService::class.java).also { intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unbindService(connection)
+        mBound = false
     }
 
     private fun initMap() {
