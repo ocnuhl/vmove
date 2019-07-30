@@ -10,12 +10,14 @@ import com.amap.api.maps.AMapOptions
 import com.amap.api.maps.MapView
 import com.amap.api.maps.model.CameraPosition
 import com.amap.api.maps.model.LatLng
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 class MainActivity : Activity() {
     private val TAG = "MainActivity"
     private val KEY_LAST_LAT = "KEY_LAST_LAT"
     private val KEY_LAST_LNG = "KEY_LAST_LNG"
     private lateinit var mMapView: MapView
+    private lateinit var mFab: FloatingActionButton
     private lateinit var mService: LocalService
     private var mBound = false
 
@@ -39,9 +41,30 @@ class MainActivity : Activity() {
         mapOptions.camera(CameraPosition(loadLastPos(), 16f, 0f, 0f))
         mMapView = MapView(this, mapOptions)
         mMapView.onCreate(savedInstanceState)
-
         findViewById<ViewGroup>(R.id.container).addView(mMapView)
         initMap()
+
+        mFab = findViewById(R.id.fab)
+        setupFab()
+    }
+
+    private fun setupFab() {
+        if (LocalService.isRunning)
+            mFab.setImageResource(android.R.drawable.ic_media_pause)
+        else
+            mFab.setImageResource(android.R.drawable.ic_media_play)
+
+        mFab.setOnClickListener {
+            val intent = Intent(this, LocalService::class.java)
+            if (LocalService.isRunning) {
+                stopService(intent)
+                LocalService.isRunning = false
+                mFab.setImageResource(android.R.drawable.ic_media_play)
+            } else {
+                startService(intent)
+                mFab.setImageResource(android.R.drawable.ic_media_pause)
+            }
+        }
     }
 
     override fun onStart() {
@@ -62,8 +85,14 @@ class MainActivity : Activity() {
         aMap.uiSettings.isZoomControlsEnabled = false
         aMap.setOnMapClickListener { latLng ->
             Log.d(TAG, "click: ${latLng.latitude}, ${latLng.longitude}")
+            if (mBound) {
+                mService.setDestination(latLng)
+            }
         }
         aMap.setOnMapLongClickListener { latLng ->
+            if (mBound) {
+                mService.setCurrentPos(latLng)
+            }
         }
     }
 
