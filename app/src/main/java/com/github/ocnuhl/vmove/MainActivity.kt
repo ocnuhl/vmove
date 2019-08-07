@@ -3,9 +3,9 @@ package com.github.ocnuhl.vmove
 import android.app.Activity
 import android.content.*
 import android.os.Bundle
-import android.os.IBinder
 import android.util.Log
 import android.view.ViewGroup
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.amap.api.maps.AMapOptions
 import com.amap.api.maps.MapView
 import com.amap.api.maps.model.CameraPosition
@@ -13,91 +13,72 @@ import com.amap.api.maps.model.LatLng
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 class MainActivity : Activity() {
-    private val TAG = "MainActivity"
-    private val KEY_LAST_LAT = "KEY_LAST_LAT"
-    private val KEY_LAST_LNG = "KEY_LAST_LNG"
-    private lateinit var mMapView: MapView
+    companion object {
+        const val TAG = "MainActivity"
+        const val KEY_LAST_LAT = "KEY_LAST_LAT"
+        const val KEY_LAST_LNG = "KEY_LAST_LNG"
+    }
+
     private lateinit var mFab: FloatingActionButton
-    private lateinit var mService: LocalService
-    private var mBound = false
-
-    private val connection = object: ServiceConnection {
-        override fun onServiceConnected(className: ComponentName?, service: IBinder?) {
-            val binder = service as LocalService.LocalBinder
-            mService = binder.getService()
-            mBound = true
-        }
-
-        override fun onServiceDisconnected(className: ComponentName?) {
-            mBound = false
+    private lateinit var mMapView: MapView
+    private val mReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                LocalService.ACTION_SERVICE_STATE_CHANGED -> {
+                    val isRunning = intent.getBooleanExtra(LocalService.SERVICE_STATE, false)
+                    val resId = if (isRunning) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+                    mFab.setImageResource(resId)
+                }
+            }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        setupFab()
+        setupMap(savedInstanceState)
+        setupReceiver()
+    }
 
+    private fun setupFab() {
+        mFab = findViewById<FloatingActionButton>(R.id.fab).also { fab ->
+            fab.setOnClickListener {
+                val intent = Intent(this, LocalService::class.java)
+                if (LocalService.isRunning) {
+                    stopService(intent)
+                } else {
+                    startService(intent)
+                }
+            }
+        }
+    }
+
+    private fun setupMap(savedInstanceState: Bundle?) {
         val mapOptions = AMapOptions()
         mapOptions.camera(CameraPosition(loadLastPos(), 16f, 0f, 0f))
         mMapView = MapView(this, mapOptions)
         mMapView.onCreate(savedInstanceState)
         findViewById<ViewGroup>(R.id.container).addView(mMapView)
-        initMap()
 
-        mFab = findViewById(R.id.fab)
-        setupFab()
-    }
-
-    private fun setupFab() {
-        if (LocalService.isRunning)
-            mFab.setImageResource(android.R.drawable.ic_media_pause)
-        else
-            mFab.setImageResource(android.R.drawable.ic_media_play)
-
-        mFab.setOnClickListener {
-            val intent = Intent(this, LocalService::class.java)
-            if (LocalService.isRunning) {
-                stopService(intent)
-                LocalService.isRunning = false
-                mFab.setImageResource(android.R.drawable.ic_media_play)
-            } else {
-                startService(intent)
-                mFab.setImageResource(android.R.drawable.ic_media_pause)
-            }
-        }
-    }
-
-    override fun onStart() {
-        super.onStart()
-        Intent(this, LocalService::class.java).also { intent ->
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        unbindService(connection)
-        mBound = false
-    }
-
-    private fun initMap() {
         val aMap = mMapView.map
         aMap.uiSettings.isZoomControlsEnabled = false
         aMap.setOnMapClickListener { latLng ->
             Log.d(TAG, "click: ${latLng.latitude}, ${latLng.longitude}")
-            if (mBound) {
-                mService.setDestination(latLng)
-            }
         }
         aMap.setOnMapLongClickListener { latLng ->
-            if (mBound) {
-                mService.setCurrentPos(latLng)
-            }
         }
+    }
+
+    private fun setupReceiver() {
+        val intentFilter = IntentFilter()
+        intentFilter.addAction(LocalService.ACTION_SERVICE_STATE_CHANGED)
+        LocalBroadcastManager.getInstance(this).registerReceiver(mReceiver, intentFilter)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(mReceiver)
         mMapView.onDestroy()
     }
 
@@ -125,10 +106,10 @@ class MainActivity : Activity() {
         editor.apply()
     }
 
-    private fun loadLastPos() : LatLng {
+    private fun loadLastPos(): LatLng {
         val pref = getSharedPreferences(TAG, MODE_PRIVATE)
         val lastLat = pref.getDouble(KEY_LAST_LAT, 39.904989)
-        val lastLng = pref.getDouble(KEY_LAST_LNG,116.405285);
+        val lastLng = pref.getDouble(KEY_LAST_LNG, 116.405285);
         return LatLng(lastLat, lastLng)
     }
 
