@@ -3,7 +3,6 @@ package com.github.ocnuhl.vmove
 import android.app.Activity
 import android.content.*
 import android.os.Bundle
-import android.util.Log
 import android.view.ViewGroup
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.amap.api.maps.AMapOptions
@@ -15,8 +14,6 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 class MainActivity : Activity() {
     companion object {
         const val TAG = "MainActivity"
-        const val KEY_LAST_LAT = "KEY_LAST_LAT"
-        const val KEY_LAST_LNG = "KEY_LAST_LNG"
     }
 
     private lateinit var mFab: FloatingActionButton
@@ -48,7 +45,7 @@ class MainActivity : Activity() {
                 if (LocalService.isRunning) {
                     stopService(intent)
                 } else {
-                    startService(intent)
+                    setPosition(LocalService.ACTION_SET_CURRENT_POS, loadLastPos())
                 }
             }
         }
@@ -64,10 +61,23 @@ class MainActivity : Activity() {
         val aMap = mMapView.map
         aMap.uiSettings.isZoomControlsEnabled = false
         aMap.setOnMapClickListener { latLng ->
-            Log.d(TAG, "click: ${latLng.latitude}, ${latLng.longitude}")
+            if (LocalService.isRunning) {
+                setPosition(LocalService.ACTION_SET_DESTINATION, latLng)
+            }
         }
         aMap.setOnMapLongClickListener { latLng ->
+            if (LocalService.isRunning) {
+                setPosition(LocalService.ACTION_SET_CURRENT_POS, latLng)
+            }
         }
+    }
+
+    private fun setPosition(action: String, latLng: LatLng) {
+        val intent = Intent(this, LocalService::class.java)
+        intent.action = action
+        intent.putExtra(LocalService.LAT, latLng.latitude)
+        intent.putExtra(LocalService.LNG, latLng.longitude)
+        startService(intent)
     }
 
     private fun setupReceiver() {
@@ -101,15 +111,15 @@ class MainActivity : Activity() {
     private fun saveLastPos() {
         val target = mMapView.map.cameraPosition.target
         val editor = getSharedPreferences(TAG, MODE_PRIVATE).edit()
-        editor.putDouble(KEY_LAST_LAT, target.latitude)
-        editor.putDouble(KEY_LAST_LNG, target.longitude)
+        editor.putDouble(LocalService.LAT, target.latitude)
+        editor.putDouble(LocalService.LNG, target.longitude)
         editor.apply()
     }
 
     private fun loadLastPos(): LatLng {
         val pref = getSharedPreferences(TAG, MODE_PRIVATE)
-        val lastLat = pref.getDouble(KEY_LAST_LAT, 39.904989)
-        val lastLng = pref.getDouble(KEY_LAST_LNG, 116.405285);
+        val lastLat = pref.getDouble(LocalService.LAT, 39.904989)
+        val lastLng = pref.getDouble(LocalService.LNG, 116.405285);
         return LatLng(lastLat, lastLng)
     }
 
