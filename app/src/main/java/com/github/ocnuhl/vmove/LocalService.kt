@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.amap.api.maps.model.LatLng
+import kotlin.math.*
 
 class LocalService : Service() {
     companion object {
@@ -77,7 +78,7 @@ class LocalService : Service() {
             try {
                 startMockLocation()
                 while (!shouldQuit) {
-                    currentPos?.let { mockLocation(it) }
+                    currentPos?.let { mockLocation(convertLocation(it)) }
                     sleep(1000)
                 }
                 stopMockLocation()
@@ -121,6 +122,34 @@ class LocalService : Service() {
             lm.setTestProviderEnabled(LocationManager.GPS_PROVIDER, false)
             lm.removeTestProvider(LocationManager.GPS_PROVIDER)
             Log.i(TAG, "Mock provider disabled")
+        }
+
+        private fun convertLocation(latLng: LatLng): LatLng {
+            val x = latLng.longitude - 105
+            val y = latLng.latitude - 35
+            val xPI = x * PI
+            val yPI = y * PI
+            var dLat = 20 * (sin(6 * xPI) + sin(2 * xPI))
+            var dLng = dLat
+            dLat += 20 * sin(yPI) + 40 * sin(yPI / 3)
+            dLng += 20 * sin(xPI) + 40 * sin(xPI / 3)
+            dLat += 160 * sin(yPI / 12) + 320 * sin(yPI / 30)
+            dLng += 150 * sin(xPI / 12) + 300 * sin(xPI / 30)
+            dLat *= 2.0 / 3.0
+            dLng *= 2.0 / 3.0
+            val a = x * y * 0.1
+            val b = sqrt(abs(x))
+            dLat += 2 * x + 3 * y + 0.2 * y * y + a + 0.2 * b - 100
+            dLng += x + 2 * y + 0.1 * x * x + a + 0.1 * b + 300
+            val c = 0.00669342162296594323
+            val d = latLng.latitude / 180 * PI
+            var e = sin(d)
+            e = 1 - c * e * e
+            val f = sqrt(e)
+            val g = 6378137.0
+            dLat = dLat * 180 / ((g * (1 - c)) / (e * f) * PI)
+            dLng = dLng * 180 / (g / f * cos(d) * PI)
+            return LatLng(latLng.latitude - dLat, latLng.longitude - dLng)
         }
     }
 }
