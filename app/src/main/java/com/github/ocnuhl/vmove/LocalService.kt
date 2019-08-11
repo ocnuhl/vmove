@@ -19,22 +19,19 @@ class LocalService : Service() {
         var isRunning = false
         const val TAG = "LocalService"
         const val ACTION_SERVICE_STATE_CHANGED = "action.SERVICE_STATE_CHANGED"
-        const val ACTION_SET_CURRENT_POS = "action.SET_CURRENT_POS"
-        const val ACTION_SET_DESTINATION = "action.SET_DESTINATION"
+        const val ACTION_REPORT_POSITION = "action.REPORT_POSITION"
         const val SERVICE_STATE = "SERVICE_STATE"
         const val LAT = "LAT"
         const val LNG = "LNG"
     }
 
     @Volatile
-    private var currentPos: LatLng? = null
-    @Volatile
-    private var destination: LatLng? = null
+    private var mPosition: LatLng? = null
     private lateinit var mThread: ServiceThread
 
     override fun onCreate() {
         super.onCreate()
-        mThread = ServiceThread().also { it.start() }
+        mThread = ServiceThread().apply { start() }
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -42,15 +39,11 @@ class LocalService : Service() {
     }
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
-        val lat = intent.getDoubleExtra(LAT, 0.0)
-        val lng = intent.getDoubleExtra(LNG, 0.0)
         when (intent.action) {
-            ACTION_SET_CURRENT_POS -> {
-                currentPos = LatLng(lat, lng)
-                destination = currentPos
-            }
-            ACTION_SET_DESTINATION -> {
-                destination = LatLng(lat, lng)
+            ACTION_REPORT_POSITION -> {
+                val lat = intent.getDoubleExtra(LAT, 0.0)
+                val lng = intent.getDoubleExtra(LNG, 0.0)
+                mPosition = LatLng(lat, lng)
             }
         }
         return START_STICKY
@@ -58,7 +51,7 @@ class LocalService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mThread.shouldQuit = true
+        mThread.interrupt()
     }
 
     private fun setServiceState(state: Boolean) {
@@ -69,27 +62,27 @@ class LocalService : Service() {
     }
 
     private inner class ServiceThread : Thread(TAG) {
-        @Volatile
-        var shouldQuit = false
         private val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         override fun run() {
-            setServiceState(true)
             try {
                 startMockLocation()
-                while (!shouldQuit) {
-                    currentPos?.let { mockLocation(convertLocation(it)) }
+                setServiceState(true)
+                while (true) {
+                    mPosition?.let { mockLocation(convertLocation(it)) }
                     sleep(1000)
                 }
-                stopMockLocation()
             } catch (e: SecurityException) {
                 Log.e(TAG, "Please enable mock location")
                 stopSelf()
+            } catch (e: InterruptedException) {
+                Log.i(TAG, "Service stopped")
             } catch (e: Exception) {
                 Log.e(TAG, "error: ${e.message}")
                 stopSelf()
             }
             setServiceState(false)
+            stopMockLocation()
         }
 
         private fun startMockLocation() {
@@ -119,9 +112,13 @@ class LocalService : Service() {
         }
 
         private fun stopMockLocation() {
-            lm.setTestProviderEnabled(LocationManager.GPS_PROVIDER, false)
-            lm.removeTestProvider(LocationManager.GPS_PROVIDER)
-            Log.i(TAG, "Mock provider disabled")
+            try {
+                lm.setTestProviderEnabled(LocationManager.GPS_PROVIDER, false)
+                lm.removeTestProvider(LocationManager.GPS_PROVIDER)
+                Log.i(TAG, "Mock provider disabled")
+            } catch (e: Exception) {
+                Log.e(TAG, "error: ${e.message}")
+            }
         }
 
         private fun convertLocation(latLng: LatLng): LatLng {
