@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.ViewGroup
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.amap.api.maps.AMapOptions
+import com.amap.api.maps.CameraUpdateFactory
 import com.amap.api.maps.MapView
 import com.amap.api.maps.model.BitmapDescriptorFactory
 import com.amap.api.maps.model.CameraPosition
@@ -76,7 +77,8 @@ class MainActivity : Activity() {
         aMap.uiSettings.isZoomControlsEnabled = false
 
         MarkerOptions().also {
-            it.position(lastPos).icon(BitmapDescriptorFactory.fromResource(R.mipmap.ic_navigation))
+            it.position(lastPos).anchor(0.5f, 0.5f).icon(BitmapDescriptorFactory.fromResource(R.mipmap.ic_navigation))
+            it.isFlat = true
             val marker = aMap.addMarker(it)
             mMarker = MovingPointOverlay(aMap, marker)
         }
@@ -132,6 +134,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         mMapView.onResume()
+        CameraUpdateFactory.changeLatLng(mMarker.position).also { mMapView.map.animateCamera(it) }
     }
 
     override fun onPause() {

@@ -63,6 +63,7 @@ class LocalService : Service() {
 
     private inner class ServiceThread : Thread(TAG) {
         private val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        private var lastLocation: Location? = null
 
         override fun run() {
             try {
@@ -108,6 +109,11 @@ class LocalService : Service() {
                 time = System.currentTimeMillis()
                 elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
             }
+            lastLocation?.let {
+                location.bearing = it.bearingTo(location)
+                location.speed = if (location.bearing == 0f) 0f else 22f // 80km/h
+            }
+            lastLocation = location
             lm.setTestProviderLocation(LocationManager.GPS_PROVIDER, location)
         }
 
